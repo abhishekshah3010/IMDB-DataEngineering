@@ -1,0 +1,191 @@
+--DIRECTLY COPYING THE QUERIES AND RUNNING WILL DO THE WORK. ONLY FILE PATH FOR COPY COMMAND NEEDS TO BE CHANGED.
+
+
+--TABLE: TITLE
+CREATE TABLE Title(
+	titleId VARCHAR(15) PRIMARY KEY,
+	titleType VARCHAR(15),
+	primaryTitle TEXT,
+	originalTitle TEXT,
+	isAdult BOOLEAN,
+	startYear INTEGER,
+	endYear INTEGER,
+	runtimeMinutes INTEGER,
+	genres VARCHAR(255)
+);
+
+--Loading data
+COPY Title
+FROM 'C:\Users\abbys\OneDrive\Desktop\title.basics.tsv'
+DELIMITER E'\t' NULL '\N' CSV HEADER ENCODING 'UTF8' QUOTE E'\b';
+
+
+--Removing unwanted characters 
+UPDATE Title 
+SET titleId = REPLACE(titleId, 'tt', '');
+
+
+--Casting to INTEGER
+ALTER TABLE Title
+ALTER COLUMN titleId TYPE INTEGER 
+USING(titleId::INTEGER);
+
+
+
+
+--TABLE: TITLE_RATING
+CREATE TABLE Title_rating(
+	titleId VARCHAR(15) PRIMARY KEY,
+	averageRating FLOAT,
+	numVotes INTEGER
+);
+
+--Loading data
+COPY Title_rating 
+FROM 'C:\Users\abbys\OneDrive\Desktop\title.ratings.tsv'
+DELIMITER E'\t' NULL '\N' CSV HEADER ENCODING 'UTF8' QUOTE E'\b';
+
+
+--Removing unwanted characters 
+UPDATE Title_rating 
+SET titleId = REPLACE(titleId, 'tt', '');
+
+
+
+--Casting to INTEGER
+ALTER TABLE Title_rating 
+ALTER COLUMN titleId TYPE INTEGER 
+USING(titleId::INTEGER); 
+
+
+--Setting foreign key
+DELETE FROM Title_rating WHERE NOT exists ( SELECT NULL FROM Title WHERE Title_rating.titleId = Title.TitleId );
+ALTER TABLE Title_rating ADD CONSTRAINT fk_title_rating_tileId FOREIGN KEY(titleId) REFERENCES Title(titleId);
+
+
+
+
+--TABLE: NAMES_
+CREATE TABLE Names_(
+  	nameId VARCHAR(15) PRIMARY KEY,
+  	primaryName VARCHAR(255) NOT NULL,
+  	birthYear SMALLINT, 
+  	deathYear SMALLINT,
+	primaryProfession TEXT,
+	knownForTitles TEXT
+);
+
+
+--Loading data
+COPY Names_ 
+FROM 'C:\Users\abbys\OneDrive\Desktop\name.basics.tsv'
+DELIMITER E'\t' NULL '\N' CSV HEADER ENCODING 'UTF8' QUOTE E'\b';
+
+
+--Dropping unwanted columns
+ALTER TABLE Names_
+DROP COLUMN primaryProfession;
+ALTER TABLE Names_
+DROP COLUMN knownForTitles;
+
+
+
+--Removing unwanted characters 
+UPDATE Names_ 
+SET NameId = REPLACE(NameId, 'nm', '');
+
+
+--Casting to INTEGER
+ALTER TABLE Names_
+ALTER COLUMN NameId TYPE INTEGER 
+USING(NameId::INTEGER);
+
+
+
+
+--TABLE: PRINCIPALS
+CREATE TABLE Principals(
+	titleId VARCHAR(15),
+	ordering_ INTEGER,
+  	nameId VARCHAR(15),
+  	category VARCHAR(50),
+	job TEXT,
+	characters_ TEXT,
+	PRIMARY KEY(titleId, ordering_)
+);
+
+--Loading data
+COPY Principals 
+FROM 'C:\Users\abbys\OneDrive\Desktop\title.principals.tsv'
+DELIMITER E'\t' NULL '\N' CSV HEADER ENCODING 'UTF8' QUOTE E'\b';
+
+
+--Dropping unwanted columns
+ALTER TABLE Principals
+DROP COLUMN job;
+
+ALTER TABLE Principals
+DROP COLUMN characters_;
+
+
+--Removing unwanted characters 
+UPDATE Principals 
+SET titleId = REPLACE(titleId, 'tt', ''), nameId = REPLACE(nameId, 'nm', '');
+
+
+--Casting to INTEGER
+ALTER TABLE Principals 
+ALTER COLUMN TitleId TYPE INTEGER 
+USING(TitleId::INTEGER);
+
+
+ALTER TABLE Principals
+ALTER COLUMN nameId TYPE INTEGER 
+USING(nameId::INTEGER); 
+
+
+--Setting foreign key
+DELETE FROM Principals WHERE NOT exists ( SELECT NULL FROM Title WHERE Principals.titleId = Title.TitleId );
+ALTER TABLE Principals ADD CONSTRAINT fk_Principals_tileId FOREIGN KEY(titleId) REFERENCES Title(titleId);
+
+
+DELETE FROM Principals WHERE NOT exists ( SELECT NULL FROM Names_ WHERE Principals.nameId = Names_.nameId);
+ALTER TABLE Principals ADD CONSTRAINT fk_Principals_nameId FOREIGN KEY(nameId) REFERENCES Names_(nameId);
+
+
+
+
+--TABLE: CREW
+CREATE TABLE Crew(
+	titleId VARCHAR(15) PRIMARY KEY,
+	directors TEXT,
+	writers TEXT
+);
+
+--Loading data
+COPY Crew 
+FROM 'C:\Users\abbys\OneDrive\Desktop\title.crew.tsv'
+DELIMITER E'\t' NULL '\N' CSV HEADER ENCODING 'UTF8' QUOTE E'\b';
+
+
+--Removing unwanted characters 
+UPDATE Crew 
+SET titleId = REPLACE(titleId, 'tt', '');
+
+
+UPDATE Crew 
+SET directors = REPLACE(directors, 'nm', ''), writers = REPLACE(writers, 'nm', '');
+
+
+--Casting to INTEGER
+ALTER TABLE Crew 
+ALTER COLUMN titleId TYPE INTEGER 
+USING(titleId::INTEGER); 
+
+
+--Setting foreign key
+DELETE FROM Crew WHERE NOT exists ( SELECT NULL FROM Title WHERE Crew.titleId = Title.TitleId );
+ALTER TABLE Crew ADD CONSTRAINT fk_Crew_tileId FOREIGN KEY(titleId) REFERENCES Title(titleId);
+
+
+--TOTAL TIME TAKEN TO RUN ALL THE QUERIES - 54 min 16 secs.

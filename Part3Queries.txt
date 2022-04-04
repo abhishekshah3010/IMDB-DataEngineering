@@ -1,0 +1,224 @@
+﻿-- Question 1
+
+-- Create new relation for Question 1 create table Question1( 
+Titleid INT,
+type varchar(255), startYear INT,
+runtime INT, avgRating FLOAT, Genreid INT,
+genre varchar(255), Memberid INT, birthYear SMALLINT, character INT 
+); 
+-- Create Temp table
+create table Temp(title integer); 
+-- Insert into Temp table insert into Temp
+select title
+from actor_title_character group by title,actor
+having count (character) > 1; 
+CSCI 620 ASSIGNMENT 3 
+Abhishek Shah, as5553 
+-- Insert into main table acc. to given conditions
+insert into Question1
+select t.id, t.type, t.startYear, t.runtime, t.avgRating, g.id, g.genre, m.id, m.birthYear, atc.character from Title as t
+join Title_Genre as tg
+on t.id = tg.title
+join Genre as g
+on tg.genre = g.id
+join Title_Actor as ta
+on ta.title = t.id
+join Member as m 
+on m.id = ta.actor
+join Actor_Title_Character as atc
+on atc.actor = m.id and atc.title = t.id
+left outer join tmc on tmc.title=t.id
+where t.runtime >= 90 and t.type='movie' and tmc.title is null; 
+-- add a new column id and make it the primary key
+alter table Question1 add primary key(Titleid, Memberid, Genreid); 
+
+
+
+
+# Question 2
+
+import itertools
+import psycopg2
+
+
+def connection(host, database, user, password, port):
+    try:
+        connection = psycopg2.connect(
+            host=host,
+            database=database,
+            user=user,
+            password=password,
+            port=port)
+        if connection:
+            print("Connection Successful!")
+            return connection
+    except Exception as err:
+        print(err)
+
+
+def columnNames(connection):
+    cursor = connection.cursor()
+    select_query = """ 
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+    AND table_name   = 'question1'
+    """
+    cursor.execute(select_query)
+    columns = []
+
+    for column in cursor:
+        columns.append(column[0])
+        yield column[0]
+
+
+def combinations(col):
+    combi = []
+    for x in range(1, len(col) + 1):
+        for ss in itertools.combinations(col, x):
+            combi.append(ss)
+    finalList = [','.join(i) for i in combi]
+    return finalList
+
+
+def funcDependencies(connection, table_name):
+    nameColumn = list(columnNames(connection))
+    combiList = combinations(nameColumn)
+    print(nameColumn)
+    print(combiList)
+
+    cursor = connection.cursor()
+
+    func_depends = []
+    for i in range(0, len(nameColumn)):
+        for j in range(0, len(combiList)):
+            if nameColumn[i] in combiList[j]:
+                continue
+
+            fd_query = f""" SELECT {combiList[j]}
+            FROM question1
+            GROUP BY {combiList[j]}
+            HAVING COUNT(DISTINCT {nameColumn[i]}) > 1
+            """
+            cursor.execute(fd_query)
+            if cursor.rowcount == 0:
+                func_depends.append(f'{combiList[j]} -> {nameColumn[i]}')
+                print(f'{combiList[j]} -> {nameColumn[i]}')
+
+    if func_depends:
+        print('Functional dependencies are:')
+        for fd in func_depends:
+            print(fd)
+    else:
+        print('Not found!')
+
+
+if __name__ == "__main__":
+    db_connection = connection('localhost', 'imdb6202',
+                               'postgres', password='Abhishek@123', port=5432)
+
+    tables_to_examine = list(columnNames(db_connection))
+    for table in tables_to_examine:
+        funcDependencies(db_connection, table)
+
+
+
+
+
+# Question 3
+
+import itertools
+import psycopg2
+
+
+def connection(host, database, user, password, port):
+    try:
+        connection = psycopg2.connect(
+            host=host,
+            database=database,
+            user=user,
+            password=password,
+            port=port)
+        if connection:
+            print("Connection Successful!")
+            return connection
+    except Exception as err:
+        print(err)
+
+
+def columnNames(connection):
+    cursor = connection.cursor()
+    select_query = """ 
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+    AND table_name   = 'question1'
+    """
+    cursor.execute(select_query)
+    columns = []
+
+    for column in cursor:
+        columns.append(column[0])
+        yield column[0]
+
+
+def combinations(col):
+    combi = []
+    for ss in itertools.combinations(col, 1):
+        combi.append(ss)
+    for x in itertools.combinations(col, 2):
+        combi.append(x)
+    finalList = [','.join(i) for i in combi]
+    return finalList
+
+
+def funcDependencies(connection, table_name):
+    nameColumn = list(columnNames(connection))
+    combiList = combinations(nameColumn)
+    print(combiList)
+
+    left_side = []
+    right_side = []
+    l = len(combiList)
+    print(l)
+    cursor = connection.cursor()
+
+    func_depends = []
+    for i in range(0, len(nameColumn)):
+        for j in range(0, len(combiList)):
+            if nameColumn[i] in combiList[j]:
+                continue
+
+            flag = False
+            for x in range(len(left_side)):
+                if left_side[x] in combiList[j] and nameColumn[i] == right_side[x]:
+                    flag = True
+                    break
+            if flag:
+                left_side.append(combiList[j])
+                right_side.append(nameColumn[i])
+                print(combiList[j] + '->' + nameColumn[i])
+                continue
+            fd_query = f""" SELECT {combiList[j]}
+                            FROM question1
+                            GROUP BY {combiList[j]}
+                            HAVING COUNT(DISTINCT({nameColumn[i]})) > 1
+                            """
+            cursor.execute(fd_query)
+            if cursor.rowcount == 0:
+                left_side.append(combiList[j])
+                right_side.append(nameColumn[i])
+                print(combiList[j] + '->' + nameColumn[i])
+
+
+if __name__ == "__main__":
+    db_connection = connection('localhost', 'imdb6202',
+                               'postgres', password='Abhishek@123', port=5432)
+
+    tables_to_examine = list(columnNames(db_connection))
+    for table in tables_to_examine:
+        funcDependencies(db_connection, table)
+
+
+
+

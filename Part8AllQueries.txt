@@ -1,0 +1,133 @@
+-- Abhishek Shah, as5553
+-- all queries/code
+
+import math
+from numpy import mean
+import matplotlib.pyplot as plt
+import pymongo
+
+client = pymongo.MongoClient("mongodb://localhost:27017/")
+database = client["imdb620"]
+collection = database['Movies4']
+collection2 = database['Centroid']
+
+
+def selectRandomDocs(k, g):
+    count = 1
+    randomDocs = collection.aggregate([
+        {"$unwind": "$genres"},
+        {"$match": {"genres": g}},
+        {"$sample": {"size": k}}
+    ])
+    collection2.delete_many({})
+    for doc in randomDocs:
+        collection2.update_one({
+            "_id": count,
+        }, {
+            "$set": {
+                "kmeansNorm": doc["kmeansNorm"]
+            }
+        }, upsert=True)
+        count += 1
+    randomDocCentroids = collection2.find({"kmeansNorm": {"$exists": "true"}})
+    return randomDocCentroids
+
+
+def eucDistance(kMeanNormData, kMeansNormCentroid):
+    xDiff = abs(kMeanNormData[0] - kMeansNormCentroid[0])
+    yDiff = abs(kMeanNormData[1] - kMeansNormCentroid[1])
+    return math.sqrt((xDiff * xDiff) + (yDiff * yDiff))
+
+
+def assigningClusters(k, g, centroidsData):
+    collection.update_many({}, {"$unset": {"cluster": ""}})
+    sameGenreDocs = collection.aggregate([
+        {"$unwind": "$genres"},
+        {"$match": {"genres": g}},
+    ])
+    sameGenreMovies = [doc for doc in sameGenreDocs]
+
+    # centroidsData = selectRandomDocs(k, g)
+    allCentroids = [doc for doc in centroidsData]
+    eucDistData = []
+
+    for i in sameGenreMovies:
+        eucDistData.clear()
+        for j in allCentroids:
+            kMeanNormData = i['kmeansNorm']
+            kMeanNormCentroid = j['kmeansNorm']
+            eucDist = eucDistance(kMeanNormData, kMeanNormCentroid)
+
+            eucDistData.append(abs(eucDist))
+        minEucDistance = min(eucDistData)
+        minValueCentroid = eucDistData.index(minEucDistance) + 1
+        collection.update_one(
+            {"_id": i["_id"]},
+            {"$set": {
+                "cluster": minValueCentroid
+            }
+            })
+
+    allClustersData = collection.find({"cluster": {"$exists": "true"}})
+    allClusters = [i for i in allClustersData]
+    return allClusters
+
+
+def updateCentroids(k, allClustersData):
+    count = 1
+    sse = []
+    for i in range(1, k + 1):
+        newCentroids = []
+        clusters = collection.aggregate([
+            {"$match": {"cluster": i}}
+        ])
+        clustersData = [i for i in clusters]
+        startyearNormal = [j["kmeansNorm"][0] for j in clustersData]
+        startyearMean = mean([j["kmeansNorm"][0] for j in clustersData])
+        avgratingMean = mean([j["kmeansNorm"][1] for j in clustersData])
+        newCentroids.extend([startyearMean, avgratingMean])
+
+        for a in startyearNormal:
+            sse.append(math.pow((a - startyearMean), 2))
+
+        collection2.update_one(
+            {"_id": count},
+            {"$set": {
+                "kmeansNorm": newCentroids
+            }
+            }, upsert=True)
+        count += 1
+    updatedCentroids = collection2.find({"kmeansNorm": {"$exists": "true"}})
+    allCentroids = [i for i in updatedCentroids]
+    return allCentroids, sse
+
+
+def generate(g):
+    sseFinal = []
+    sseSum = 0
+    kValue = []
+    for i in range(10, 55, 5):
+        kValue.append(i)
+        initial_centroids = selectRandomDocs(i, g)
+        datapoints = assigningClusters(i, g, initial_centroids)
+        new, sse = updateCentroids(i, datapoints)
+        # sseSum  = sum([i for i in sse])
+        iterations = 0
+        while iterations < 10:
+            print("iter: ", iterations)
+            if len(new) == 1:
+                break
+            datapoints = assigningClusters(i, g, new)
+            new, sse = updateCentroids(i, datapoints)
+            sseSum += sum([i for i in sse])
+            iterations += 1
+        sseFinal.append(sseSum)
+    plt.plot(kValue, sseFinal)
+    plt.show()
+
+
+generate('Action')
+generate('Horror')
+generate('Romance')
+generate('Sci-Fi')
+generate('Thriller')

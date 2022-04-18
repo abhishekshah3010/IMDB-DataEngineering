@@ -27,4 +27,4 @@ Part7: Itemset Mining using Apriori Algorithm
 
 Part8: Clusetering using K-Means
 
-Part9: Distributed data processing
+Part9: Distributed data processing (Apache Spark)

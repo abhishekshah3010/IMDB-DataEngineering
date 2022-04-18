@@ -1,0 +1,125 @@
+import time
+from pyspark.sql import SparkSession
+from pyspark.sql.types import IntegerType
+from pyspark.sql.functions import array_contains, split, countDistinct, translate
+
+
+spark = SparkSession.builder.appName("Assignment 9").getOrCreate()
+
+
+# data file path
+nameBasics = "/Users/abhishekshah/Documents/Spring 22/Ass-BD-620/Assignment9/name.basics.tsv"
+titlePrincipals = "/Users/abhishekshah/Documents/Spring 22/Ass-BD-620/Assignment9/title.principals.tsv"
+titleBasics = "/Users/abhishekshah/Documents/Spring 22/Ass-BD-620/Assignment9/title.basics.tsv"
+
+
+# create and load dataframe
+members = spark.read.csv(nameBasics, sep=r'\t', header=True)
+principal = spark.read.csv(titlePrincipals, sep=r'\t', header=True)
+title = spark.read.csv(titleBasics, sep=r'\t', header=True)
+
+
+# cast startYear and endYear to integer
+title.startYear.cast(IntegerType())
+title.endYear.cast(IntegerType())
+
+
+# Query 1
+
+startTime = time.time()
+
+aliveActors = principal.join(members, on="nconst", how="inner")
+
+aliveActors = aliveActors.where(
+    (aliveActors.deathYear == None) | (aliveActors.deathYear == '\\N') &
+    (aliveActors.category.contains("actor")) &
+    (aliveActors.primaryName.startswith("Phi"))).select("tconst", "primaryName")
+
+aliveActors = aliveActors.join(title, on="tconst", how="inner")
+
+aliveActors = aliveActors.where(
+    (aliveActors.titleType.contains("movie")) &
+    (aliveActors.startYear != 2014)).select("primaryName")
+
+aliveActors.show()
+endTime = time.time()
+print("Query 1 runtime for " + str(aliveActors.count()) + " rows is " + str(round(endTime - startTime)) + " seconds")
+
+
+
+# Query 2
+
+producer = principal.where(principal.category == "producer")
+
+startTime = time.time()
+
+ProducerTalkShow = producer.join(title, on="tconst", how="inner")
+
+ProducerTalkShow = ProducerTalkShow.where(
+    (ProducerTalkShow.startYear == 2017)).select("tconst", "nconst", "category", split("genres", ",").alias("Genre"))
+ProducerTalkShow = ProducerTalkShow.join(members, on="nconst", how="inner")
+
+ProducerTalkShow = ProducerTalkShow.where(
+    array_contains(ProducerTalkShow.Genre, "Talk-Show") &
+    (ProducerTalkShow.primaryName.contains("Gill"))).groupBy("primaryName").agg(
+    countDistinct("tconst").alias("count")).orderBy("count")
+
+ProducerTalkShow.show()
+
+endTime = time.time()
+print(
+    "Query 2 runtime for " + str(ProducerTalkShow.count()) + " rows is " + str(round(endTime - startTime)) + " seconds")
+
+
+
+
+# Query 3
+
+title.runtimeMinutes.cast(IntegerType())
+producer = principal.where(principal.category == "producer")
+
+startTime = time.time()
+
+aliveProducers = members.join(producer, on="nconst", how="inner")
+
+aliveProducers = aliveProducers.where(
+    (aliveProducers.deathYear == None) | (aliveProducers.deathYear == '\\N'))
+
+aliveProducers = aliveProducers.join(title, on="tconst", how="inner")
+
+aliveProducers = aliveProducers.where(
+    (aliveProducers.runtimeMinutes) > 120).orderBy(aliveProducers.runtimeMinutes.desc()).select(
+    "primaryName").distinct()
+
+aliveProducers.show()
+
+endTime = time.time()
+print("Query 3 runtime for " + str(aliveProducers.count()) + " rows is " + str(round(endTime - startTime)) + " seconds")
+
+
+
+# Query 4
+principal = principal.withColumn("characters", translate("characters", "[", ""))
+principal = principal.withColumn("characters", translate("characters", "]", ""))
+principal = principal.withColumn("characters", translate("characters", '"', ""))
+
+startTime = time.time()
+
+aliveActors = members.join(principal, on="nconst", how="inner")
+
+aliveActors = aliveActors.where(
+    (aliveActors.deathYear == None) | (aliveActors.deathYear == '\\N') &
+    aliveActors.category.contains("actor"))
+
+aliveActors = aliveActors.withColumn("characters", split("characters", ","))
+
+aliveActors = aliveActors.where(
+    (array_contains(aliveActors.characters, "Jesus")) |
+    (array_contains(aliveActors.characters, "Christ"))).select("primaryName").distinct()
+
+aliveActors.show()
+
+endTime = time.time()
+print("Query 4 runtime for " + str(aliveActors.count()) + " rows is " + str(round(endTime - startTime)) + " seconds")
+
+
